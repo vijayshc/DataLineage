@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Lineage Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/dagre-d3@0.6.4/dist/dagre-d3.min.js"></script>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; }
+        .container { 
+            width: 100vw; 
+            height: 100vh; 
+            overflow: hidden;
+            background: #fff;
+        }
+        svg {
+            background: #fff;
+        }
+        .node { fill: #fff; }
+        .node.table { 
+            fill: #ffffff;
+            stroke: #2c3e50;
+            stroke-width: 2px;
+        }
+        .node.column { 
+            fill: #f8f9fa;
+            stroke: #6c757d;
+            stroke-width: 1px;
+        }
+        .edgePath path { 
+            stroke: #6c757d; 
+            stroke-width: 1.5px; 
+            fill: none; 
+        }
+        .node text { 
+            font-size: 16px; /* Increased font size */
+            fill: #333;
+            text-transform: uppercase; /* Added uppercase transformation */
+        }
+        .table-title {
+            font-weight: bold;
+            font-size: 18px; /* Increased font size */
+            fill: #2c3e50;
+            text-transform: uppercase; /* Added uppercase transformation */
+        }
+        .tooltip { 
+            position: absolute;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #4a90e2;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 12px;
+            color: #333;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .cluster {
+            fill: #ffffff;
+            stroke: #2c3e50;
+            stroke-width: 1px;
+            padding-top: 20px; /* Add padding at top of cluster */
+        }
+        .cluster rect {
+            fill: #ffffff !important;
+        }
+        .cluster .label {
+            font-weight: bold;
+            font-size: 25px;
+            fill: #2c3e50;
+            transform: translateY(-30px); /* Move label down from top border */
+            text-transform: uppercase; /* Added uppercase transformation */
+        }
+        .node.highlighted {
+            stroke: #2ecc71 !important; /* Changed to green */
+            stroke-width: 3px !important;
+            filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.7)) !important; /* Adjusted shadow color */
+            animation: glow 1.5s ease-in-out infinite;
+        }
+        /* New rule for column nodes */
+        .node.column.highlighted {
+            stroke: #2ecc71 !important; /* Changed to green */
+            stroke-width: 3px !important;
+            filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.7)) !important; /* Adjusted shadow color */
+            animation: glow 1.5s ease-in-out infinite;
+        }
+        .edgePath.highlighted path {
+            stroke: #2ecc71 !important; /* Changed to green */
+            stroke-width: 2.5px !important;
+            filter: drop-shadow(0 0 3px rgba(46, 204, 113, 0.7)) !important; /* Adjusted shadow color */
+        }
+        .node.dependent {
+            stroke: #f39c12 !important;
+            stroke-width: 2px !important;
+            filter: drop-shadow(0 0 4px rgba(243, 156, 18, 0.6)) !important;
+            animation: dependentGlow 1.5s ease-in-out infinite;
+        }
+        .edgePath.dependent path {
+            stroke: #f39c12 !important;
+            stroke-width: 2px !important;
+            filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)) !important;
+        }
+        @keyframes glow {
+            0% { filter: drop-shadow(0 0 4px rgba(46, 204, 113, 0.7)); } /* Adjusted shadow color */
+            50% { filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.9)); } /* Adjusted shadow color */
+            100% { filter: drop-shadow(0 0 4px rgba(46, 204, 113, 0.7)); } /* Adjusted shadow color */
+        }
+        @keyframes dependentGlow {
+            0% { filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)); }
+            50% { filter: drop-shadow(0 0 6px rgba(243, 156, 18, 0.8)); }
+            100% { filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)); }
+        }
+        .node.highlighted-blue rect.label-container {
+            fill: #3498db !important;
+            stroke: #1f78b4 !important;
+        }
+        .edgePath.highlighted-blue path {
+            stroke: #3498db !important;
+            stroke-width: 2.5px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg width="100%" height="100%">
+            <g transform="translate(20,20)"/>
+        </svg>
+    </div>
+    <script>
+        const data = {{data|safe}};
+        
+        // Create digraph
+        const g = new dagreD3.graphlib.Graph({compound: true})
+            .setGraph({
+                rankdir: 'LR', // Left to Right layout
+                marginx: 20,
+                marginy: 40, // Increased top margin
+                nodesep: 20,
+                ranksep: 50,
+                edgesep: 50,
+                rankAlignment: 'UL', // Align to upper left
+                clusterPadding: 30, // Increased padding
+                labelStyle: 'padding-top: 10px;'
+            });
+
+        // Add nodes
+        data.nodes.forEach(node => {
+            if (node.type === 'table') {
+                g.setNode(node.id, {
+                    label: node.label,
+                    class: `node ${node.type}`,
+                    rx: 5,
+                    ry: 5,
+                    padding: 15,
+                    paddingTop: 25, // Extra padding at top for label
+                    width: 300,
+                    height: 40,
+                    labelpos: 'top',  // Position label at top
+                    clusterLabelPos: 'top',  // Position cluster label at top
+                    style: 'padding-top: 20px;'
+                });
+            } else {
+                g.setNode(node.id, {
+                    label: node.label,
+                    class: `node ${node.type}`,
+                    rx: 5,
+                    ry: 5,
+                    padding: 10,
+                    width: 300,
+                    height: 30
+                });
+            }
+            
+            if (node.parent) {
+                g.setParent(node.id, node.parent);
+            }
+        });
+
+        // Add edges
+        data.edges.forEach(edge => {
+            g.setEdge(edge.source, edge.target, {
+                label: edge.label,
+                curve: d3.curveBasis,
+                arrowheadClass: 'arrowhead'
+            });
+        });
+
+        // Create renderer
+        const svg = d3.select("svg");
+        const inner = svg.select("g");
+        const zoom = d3.zoom().on("zoom", e => inner.attr("transform", e.transform));
+        svg.call(zoom);
+
+        const render = new dagreD3.render();
+        render(inner, g);
+
+        // Center graph
+        const initialScale = 0.75;
+        const svgWidth = svg.node().getBoundingClientRect().width;
+        const svgHeight = svg.node().getBoundingClientRect().height;
+        const graphWidth = g.graph().width;
+        const graphHeight = g.graph().height;
+        const translateX = (svgWidth - graphWidth * initialScale) / 2;
+        const translateY = (svgHeight - graphHeight * initialScale) / 2;
+        
+        svg.call(zoom.transform, d3.zoomIdentity
+            .translate(translateX, translateY)
+            .scale(initialScale));
+
+        // Add tooltips
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        inner.selectAll("g.node")
+            .on("mouseover", (event, id) => {
+                const node = data.nodes.find(n => n.id === id); 
+                if (node) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    tooltip.html(`
+                        <strong>${node.label}</strong><br/>
+                        Type: ${node.type}<br/>
+                        ${node.type === 'table' ? `Columns: ${node.columns?.length || 0}` : ''}
+                    `)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+                }
+            })
+            .on("mouseout", () => {
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            });
+
+        // Function to find dependent nodes (fixed version)
+        function findDependencies(nodeId) {
+            const deps = new Set();
+            const visited = new Set();
+            const edges = g.edges();
+            
+            function traverse(id) {
+                if (visited.has(id)) return;
+                visited.add(id);
+                
+                edges.forEach(e => {
+                    // Forward dependencies
+                    if (e.v === id && !visited.has(e.w)) {
+                        deps.add(e.w);
+                        deps.add(e);
+                        traverse(e.w);
+                    }
+                    // Backward dependencies
+                    if (e.w === id && !visited.has(e.v)) {
+                        deps.add(e.v);
+                        deps.add(e);
+                        traverse(e.v);
+                    }
+                });
+            }
+            
+            traverse(nodeId);
+            return deps;
+        }
+
+        // Function to reset highlights
+        function resetHighlights() {
+            // Removed highlighted-blue class
+            inner.selectAll('.highlighted, .dependent')
+                .classed('highlighted', false)
+                .classed('dependent', false);
+        }
+
+        // Update click handler for nodes
+        inner.selectAll('g.node')
+            .attr('id', function(nodeId) { // Add this line to set the 'id' attribute
+                return nodeId;
+            })
+            .on('click', (event, nodeId) => {
+                event.stopPropagation();
+                resetHighlights();
+                
+                // Clean the node ID (remove the prefix if it's present)
+                const cleanId = nodeId.replace('node-', '');
+                
+                // Highlight clicked node with transition
+                const clickedNode = inner.selectAll('g.node[id="' + cleanId + '"]');
+                
+                // Apply glowing effect by adding 'highlighted' class
+                clickedNode
+                    .classed('highlighted', true)
+                    .style('opacity', 0.8)
+                    .transition()
+                    .duration(300)
+                    .style('opacity', 1);
+                
+                // Find and highlight dependencies
+                const deps = findDependencies(cleanId);
+                deps.forEach(dep => {
+                    if (typeof dep === 'string') {
+                        inner.selectAll('g.node[id="' + dep + '"]')
+                        .classed('dependent', true)
+                        .style('opacity', 0.8)
+                        .transition()
+                        .duration(300)
+                        .style('opacity', 1);
+                    } else {
+                        const edgeId = `${dep.v}->${dep.w}`;
+                        inner.selectAll('.edgePath[id="' + edgeId + '"]')
+                        .classed('dependent', true) // Add 'dependent' class to edges
+                        .classed('highlighted', false) // Remove 'highlighted' class from edges
+                        .style('opacity', 0.8)
+                        .transition()
+                        .duration(300)
+                        .style('opacity', 1);
+                    }
+                });
+            });
+
+        // Click on background to reset
+        svg.on('click', () => {
+            resetHighlights();
+        });
+    </script>
+</body>
+</html>
