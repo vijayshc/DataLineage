@@ -1,0 +1,189 @@
+/* Custom CSS */
+body { margin: 0; font-family: Arial, sans-serif; }
+.container { 
+    width: 100vw; 
+    height: 100vh; 
+    overflow: hidden;
+    background: #fff;
+}
+svg {
+    background: #fff;
+}
+.node { fill: #fff; }
+.node.table { 
+    fill: #ffffff;
+    stroke: #2c3e50;
+    stroke-width: 2px;
+}
+.node.column { 
+    fill: #f8f9fa;
+    stroke: #6c757d;
+    stroke-width: 1px;
+}
+.edgePath path { 
+    stroke: #6c757d; 
+    stroke-width: 1.5px; 
+    fill: none; 
+}
+.node text { 
+    font-size: 16px;
+    fill: #333;
+    text-transform: uppercase;
+}
+.table-title {
+    font-weight: bold;
+    font-size: 18px;
+    fill: #2c3e50;
+    text-transform: uppercase;
+}
+.tooltip { 
+    position: absolute;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #4a90e2;
+    border-radius: 4px;
+    pointer-events: none;
+    font-size: 12px;
+    color: #333;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.cluster {
+    fill: #ffffff;
+    /* Remove or adjust existing stroke if needed */
+}
+.cluster rect {
+    fill: #ffffff !important;
+    stroke: #2c3e50 !important;
+    stroke-width: 2px !important;  /* Increased border width for visibility */
+    rx: 5; /* optional: rounded corners */
+    ry: 5;
+}
+
+.cluster .label {
+    font-weight: bold;
+    font-size: 25px;
+    fill: #2c3e50;
+    transform: translateY(-30px); /* Move label down from top border */
+    text-transform: uppercase; /* Added uppercase transformation */
+}
+
+.cluster text {
+    fill: #000 !important;
+}
+.node.highlighted {
+    stroke: #2ecc71 !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.7)) !important;
+    animation: glow 1.5s ease-in-out infinite;
+}
+.node.column.highlighted {
+    stroke: #2ecc71 !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px rgba(46, 204, 113, 0.7)) !important;
+    animation: glow 1.5s ease-in-out infinite;
+}
+.edgePath.highlighted path {
+    stroke: #2ecc71 !important;
+    stroke-width: 2.5px !important;
+    filter: drop-shadow(0 0 3px rgba(46, 204, 113, 0.7)) !important;
+}
+.node.dependent {
+    stroke: #f39c12 !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 4px rgba(243, 156, 18, 0.6)) !important;
+    animation: dependentGlow 1.5s ease-in-out infinite;
+}
+.edgePath.dependent path {
+    stroke: #f39c12 !important;
+    stroke-width: 2px !important;
+    filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)) !important;
+}
+@keyframes glow {
+    0% { filter: drop-shadow(0 0 4px rgba(46, 204, 113, 0.7)); }
+    50% { filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.9)); }
+    100% { filter: drop-shadow(0 0 4px rgba(46, 204, 113, 0.7)); }
+}
+@keyframes dependentGlow {
+    0% { filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)); }
+    50% { filter: drop-shadow(0 0 6px rgba(243, 156, 18, 0.8)); }
+    100% { filter: drop-shadow(0 0 3px rgba(243, 156, 18, 0.6)); }
+}
+.node.highlighted-blue rect.label-container {
+    fill: #3498db !important;
+    stroke: #1f78b4 !important;
+}
+.edgePath.highlighted-blue path {
+    stroke: #3498db !important;
+    stroke-width: 2.5px !important;
+}
+/* Bootstrap compatible styles */
+.navbar {
+    background-color: #2c3e50 !important;
+}
+.navbar-brand {
+    color: white !important;
+    font-weight: bold;
+}
+.btn-toolbar {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.btn-toolbar.hidden {
+    display: none;
+}
+.main-container {
+    padding-top: 56px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+.visualization-container {
+    flex-grow: 1;
+    position: relative;
+    background: #fff;
+}
+/* Bootstrap tooltip override */
+.tooltip {
+    font-family: inherit !important;
+    font-size: 0.875rem !important;
+}
+.view-toggle {
+    position: fixed;
+    top: 70px;
+    left: 20px;
+    z-index: 1000;
+}
+.table-container {
+    display: none;
+    padding: 20px;
+    margin-top: 60px;
+}
+.table-container.active {
+    display: block;
+}
+.visualization-container.hidden {
+    display: none;
+}
+/* Table cell style */
+.bootstrap-table .table td,
+.bootstrap-table .table th {
+    text-transform: uppercase;
+}
+/* Modify button toolbar for table view */
+.table-buttons {
+    display: none;
+    margin-bottom: 15px;
+}
+.table-container.active .table-buttons {
+    display: block;
+}
+.graph-only.hidden,
+.table-only.hidden {
+    display: none;
+}

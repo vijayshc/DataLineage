@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 import json
 
 app = Flask(__name__)
@@ -11,12 +11,14 @@ lineage_data = {
         "order_date": {"source_table": None, "source_column": None},
         "total_amount": {"source_table": "Order_Items", "source_column": "item_price", "aggregation": "SUBSTR(COLUMN,1,2)"},
         "shipping_address": [{"source_table": "Customers", "source_column": "address"},{"source_table": "Customers", "source_column": "registration_datedfdfdfdfd"}],
+        "product_id": {"source_table": "Products", "source_column": "product_id"},
     },
     "Customers": {
         "customer_id": {"source_table": None, "source_column": None},
         "customer_name": {"source_table": None, "source_column": None},
         "address": {"source_table": None, "source_column": None},
         "registration_datedfdfdfdfd": {"source_table": None, "source_column": None},
+
     },
     "Order_Items": {
         "item_id": {"source_table": None, "source_column": None},
@@ -24,6 +26,7 @@ lineage_data = {
         "product_id": {"source_table": "Products", "source_column": "product_id"},
         "item_price": {"source_table": "Products", "source_column": "price"},
         "quantity": {"source_table": None, "source_column": None},
+        "product_id": {"source_table": "Products", "source_column": "product_id"},
     },
     "Products": {
         "product_id": {"source_table": None, "source_column": None},
@@ -91,6 +94,12 @@ def prepare_graph_data():
 def index():
     graph_data = prepare_graph_data()
     return render_template('lineage.html', data=json.dumps(graph_data))
+
+@app.route('/data')
+def data_endpoint():
+    # In a real application, implement logic here to return updated lineage data.
+    graph_data = prepare_graph_data()
+    return jsonify(graph_data)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
