@@ -10,7 +10,7 @@ lineage_data = {
         "customer_id": {"source_table": "Customers", "source_column": "customer_id"},
         "order_date": {"source_table": None, "source_column": None},
         "total_amount": {"source_table": "Order_Items", "source_column": "item_price", "aggregation": "SUBSTR(COLUMN,1,2)"},
-        "shipping_address": {"source_table": "Customers", "source_column": "address"},
+        "shipping_address": [{"source_table": "Customers", "source_column": "address"},{"source_table": "Customers", "source_column": "registration_datedfdfdfdfd"}],
     },
     "Customers": {
         "customer_id": {"source_table": None, "source_column": None},
@@ -39,14 +39,13 @@ def prepare_graph_data():
     
     # Create nodes for tables and columns
     for table, columns in lineage_data.items():
-        # Remove "table_" prefix
-        table_id = table  # was f"table_{table}"
+        table_id = table
         nodes.append({
             "id": table_id,
             "label": table,
             "type": "table",
             "columns": list(columns.keys()),
-            "labelLength": len(table)  # Add label length
+            "labelLength": len(table)
         })
         
         # Add column nodes
@@ -57,17 +56,34 @@ def prepare_graph_data():
                 "label": column,
                 "type": "column",
                 "parent": table_id,
-                "labelLength": len(column)  # Add label length
+                "labelLength": len(column)
             })
             
-            # Add edges for column relationships
-            if details["source_table"] and details["source_column"]:
-                source_id = f"{details['source_table']}.{details['source_column']}"
-                edges.append({
-                    "source": source_id,
-                    "target": column_id,
-                    "label": details.get("aggregation", "")
-                })
+            # Add edges for column relationships supporting multiple sources
+            # If details is a list then iterate through each dictionary item
+            if isinstance(details, list):
+                for detail in details:
+                    if detail.get("source_table") and detail.get("source_column"):
+                        edges.append({
+                            "source": f"{detail['source_table']}.{detail['source_column']}",
+                            "target": column_id,
+                            "label": detail.get("aggregation", "")
+                        })
+            else:
+                if details.get("source_table") and details.get("source_column"):
+                    if isinstance(details["source_table"], list) and isinstance(details["source_column"], list):
+                        for src_table, src_column in zip(details["source_table"], details["source_column"]):
+                            edges.append({
+                                "source": f"{src_table}.{src_column}",
+                                "target": column_id,
+                                "label": details.get("aggregation", "")
+                            })
+                    else:
+                        edges.append({
+                            "source": f"{details['source_table']}.{details['source_column']}",
+                            "target": column_id,
+                            "label": details.get("aggregation", "")
+                        })
 
     return {"nodes": nodes, "edges": edges}
 

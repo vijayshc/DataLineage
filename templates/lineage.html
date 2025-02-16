@@ -242,6 +242,13 @@
                 <button class="btn btn-outline-success table-only hidden" onclick="downloadTableExcel()">
                     <i class="bi bi-file-excel"></i> Save as Excel
                 </button>
+                <!-- New buttons for column toggling -->
+                <button class="btn btn-outline-secondary graph-only" onclick="hideNonDependentColumns()">
+                    Hide Non-Dependent Columns
+                </button>
+                <button class="btn btn-outline-secondary graph-only" onclick="showAllColumns()">
+                    Show All Columns
+                </button>
             </div>
         </div>
 
@@ -282,10 +289,105 @@
     <script src="https://unpkg.com/bootstrap-table@1.22.1/dist/bootstrap-table.min.js"></script>
     
     <script>
-        const data = {{data|safe}};
-        
+        const originalData = {{data|safe}};  // retain original data
+        let data = originalData;  // current graph data
+
+        // Function to update (re-render) the graph with new data
+        function updateGraph(newData) {
+            data = newData;
+            // Re-create the graph instance with same configuration
+            let newG = new dagreD3.graphlib.Graph({compound: true})
+                .setGraph({
+                    rankdir: 'LR',
+                    marginx: 20,
+                    marginy: 40,
+                    nodesep: 20,
+                    ranksep: 50,
+                    edgesep: 50,
+                    rankAlignment: 'UL',
+                    clusterPadding: 30,
+                    labelStyle: 'padding-top: 10px;'
+                });
+            
+            // Add nodes
+            newData.nodes.forEach(node => {
+                if (node.type === 'table') {
+                    newG.setNode(node.id, {
+                        label: node.label,
+                        class: `node ${node.type}`,
+                        rx: 5,
+                        ry: 5,
+                        padding: 15,
+                        paddingTop: 25,
+                        width: 300,
+                        height: 40,
+                        labelpos: 'top',
+                        clusterLabelPos: 'top',
+                        style: 'padding-top: 20px;'
+                    });
+                } else {
+                    newG.setNode(node.id, {
+                        label: node.label,
+                        class: `node ${node.type}`,
+                        rx: 5,
+                        ry: 5,
+                        padding: 10,
+                        width: 300,
+                        height: 30
+                    });
+                }
+                if (node.parent) newG.setParent(node.id, node.parent);
+            });
+
+            // Add edges
+            newData.edges.forEach(edge => {
+                newG.setEdge(edge.source, edge.target, {
+                    label: edge.label,
+                    curve: d3.curveBasis,
+                    arrowheadClass: 'arrowhead'
+                });
+            });
+
+            // Remove previous graph and re-render
+            inner.html("");
+            render(inner, newG);
+            g = newG; // update global graph
+
+            // Re-center graph
+            const initialScale = 0.75;
+            const svgWidth = svg.node().getBoundingClientRect().width;
+            const svgHeight = svg.node().getBoundingClientRect().height;
+            const graphWidth = g.graph().width;
+            const graphHeight = g.graph().height;
+            const translateX = (svgWidth - graphWidth * initialScale) / 2;
+            const translateY = (svgHeight - graphHeight * initialScale) / 2;
+            svg.call(zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(initialScale));
+
+            // Re-attach event listeners for nodes and tooltips
+            attachNodeEvents();
+        }
+
+        // Modify function to hide and reload graph without non-dependent column nodes
+        function hideNonDependentColumns() {
+            // Filter out column nodes that are not used in any edge.
+            const filteredNodes = originalData.nodes.filter(node => {
+                if (node.type !== 'column') return true;
+                const used = originalData.edges.some(e => e.source === node.id || e.target === node.id);
+                return used;
+            });
+            // Also filter edges to include only those connecting nodes in filteredNodes.
+            const validIds = new Set(filteredNodes.map(n => n.id));
+            const filteredEdges = originalData.edges.filter(e => validIds.has(e.source) && validIds.has(e.target));
+            updateGraph({nodes: filteredNodes, edges: filteredEdges});
+        }
+
+        // Modify function to restore full graph by re-rendering using original data.
+        function showAllColumns() {
+            updateGraph(originalData);
+        }
+
         // Create digraph
-        const g = new dagreD3.graphlib.Graph({compound: true})
+        let g = new dagreD3.graphlib.Graph({compound: true})
             .setGraph({
                 rankdir: 'LR', // Left to Right layout
                 marginx: 20,
@@ -367,32 +469,6 @@
             .attr("class", "tooltip")
             .style("opacity", 0);
 
-        inner.selectAll("g.node")
-            .on("mouseover", (event, id) => {
-                const node = data.nodes.find(n => n.id === id); 
-                if (node) {
-                    tooltip.transition()
-                        .duration(200)
-                        .style("opacity", .9);
-                    tooltip.html(`
-                        <div class="card border-0">
-                            <div class="card-body p-2">
-                                <h6 class="card-title mb-2">${node.label}</h6>
-                                <p class="card-text mb-1">Type: ${node.type}</p>
-                                ${node.type === 'table' ? `<p class="card-text mb-0">Columns: ${node.columns?.length || 0}</p>` : ''}
-                            </div>
-                        </div>
-                    `)
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-                }
-            })
-            .on("mouseout", () => {
-                tooltip.transition()
-                    .duration(500)
-                    .style("opacity", 0);
-            });
-
         // Function to find dependent nodes (fixed version)
         function findDependencies(nodeId) {
             const deps = new Set();
@@ -432,50 +508,57 @@
         }
 
         // Update click handler for nodes
-        inner.selectAll('g.node')
-            .attr('id', function(nodeId) { // Add this line to set the 'id' attribute
-                return nodeId;
-            })
-            .on('click', (event, nodeId) => {
-                event.stopPropagation();
-                resetHighlights();
-                
-                // Clean the node ID (remove the prefix if it's present)
-                const cleanId = nodeId.replace('node-', '');
-                
-                // Highlight clicked node with transition
-                const clickedNode = inner.selectAll('g.node[id="' + cleanId + '"]');
-                
-                // Apply glowing effect by adding 'highlighted' class
-                clickedNode
-                    .classed('highlighted', true)
-                    .style('opacity', 0.8)
-                    .transition()
-                    .duration(300)
-                    .style('opacity', 1);
-                
-                // Find and highlight dependencies
-                const deps = findDependencies(cleanId);
-                deps.forEach(dep => {
-                    if (typeof dep === 'string') {
-                        inner.selectAll('g.node[id="' + dep + '"]')
-                        .classed('dependent', true)
-                        .style('opacity', 0.8)
-                        .transition()
-                        .duration(300)
-                        .style('opacity', 1);
-                    } else {
-                        const edgeId = `${dep.v}->${dep.w}`;
-                        inner.selectAll('.edgePath[id="' + edgeId + '"]')
-                        .classed('dependent', true) // Add 'dependent' class to edges
-                        .classed('highlighted', false) // Remove 'highlighted' class from edges
-                        .style('opacity', 0.8)
-                        .transition()
-                        .duration(300)
-                        .style('opacity', 1);
+        function attachNodeEvents() {
+            inner.selectAll("g.node")
+                .attr("id", nodeId => nodeId)
+                .on("mouseover", (event, id) => {
+                    const node = data.nodes.find(n => n.id === id);
+                    if (node) {
+                        tooltip.transition().duration(200).style("opacity", 0.9);
+                        tooltip.html(`
+                            <div class="card border-0">
+                                <div class="card-body p-2">
+                                    <h6 class="card-title mb-2">${node.label}</h6>
+                                    <p class="card-text mb-1">Type: ${node.type}</p>
+                                    ${node.type === 'table' ? `<p class="card-text mb-0">Columns: ${node.columns?.length || 0}</p>` : ''}
+                                </div>
+                            </div>
+                        `)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
                     }
+                })
+                .on("mouseout", () => {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                })
+                .on("click", (event, nodeId) => {
+                    event.stopPropagation();
+                    resetHighlights();
+                    const cleanId = nodeId.replace("node-", "");
+                    const clickedNode = inner.selectAll('g.node[id="' + cleanId + '"]');
+                    clickedNode.classed("highlighted", true)
+                        .style("opacity", 0.8)
+                        .transition().duration(300).style("opacity", 1);
+                    const deps = findDependencies(cleanId);
+                    deps.forEach(dep => {
+                        if (typeof dep === "string") {
+                            inner.selectAll('g.node[id="' + dep + '"]')
+                            .classed("dependent", true)
+                            .style("opacity", 0.8)
+                            .transition().duration(300).style("opacity", 1);
+                        } else {
+                            const edgeId = `${dep.v}->${dep.w}`;
+                            inner.selectAll('.edgePath[id="' + edgeId + '"]')
+                            .classed("dependent", true)
+                            .classed("highlighted", false)
+                            .style("opacity", 0.8)
+                            .transition().duration(300).style("opacity", 1);
+                        }
+                    });
                 });
-            });
+        }
+
+        attachNodeEvents();
 
         // Click on background to reset
         svg.on('click', () => {
@@ -485,15 +568,14 @@
         function downloadSVG(format) {
             // Get the original SVG element
             const originalSvg = document.querySelector('svg');
-            
             // Create a copy of the SVG
             const svgCopy = originalSvg.cloneNode(true);
-            
+
             // Get the transform values from the inner g element
             const transform = inner.attr("transform");
             const gElement = svgCopy.querySelector('g');
             gElement.setAttribute('transform', transform);
-            
+
             // Add required attributes
             svgCopy.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             
@@ -505,16 +587,18 @@
                 .join('\n');
             styleSheet.textContent = styles;
             svgCopy.insertBefore(styleSheet, svgCopy.firstChild);
-            
-            // Get the bounding box of the content
-            const bbox = inner.node().getBBox();
-            const transformed = inner.node().getBoundingClientRect();
-            
-            // Set viewBox and dimensions to match content
-            svgCopy.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
-            svgCopy.setAttribute('width', transformed.width);
-            svgCopy.setAttribute('height', transformed.height);
-            
+
+            // Get the entire visualization-container dimensions
+            const container = document.querySelector('.visualization-container');
+            const containerRect = container.getBoundingClientRect();
+            const viewBoxWidth = containerRect.width;
+            const viewBoxHeight = containerRect.height;
+
+            // Set viewBox and dimensions to match the entire container
+            svgCopy.setAttribute('viewBox', `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
+            svgCopy.setAttribute('width', viewBoxWidth);
+            svgCopy.setAttribute('height', viewBoxHeight);
+
             // Serialize the SVG
             const serializer = new XMLSerializer();
             const svgData = serializer.serializeToString(svgCopy);
@@ -531,17 +615,16 @@
                 
                 img.onload = function() {
                     const canvas = document.createElement('canvas');
-                    // Set canvas size to match the SVG dimensions
-                    canvas.width = transformed.width * 2;  // multiply by 2 for better resolution
-                    canvas.height = transformed.height * 2;
+                    // Set canvas size using container dimensions (doubling for higher resolution)
+                    canvas.width = viewBoxWidth * 2;
+                    canvas.height = viewBoxHeight * 2;
                     
                     const ctx = canvas.getContext('2d');
-                    // Scale for better resolution
                     ctx.scale(2, 2);
                     // Draw with white background
                     ctx.fillStyle = 'white';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0, transformed.width, transformed.height);
+                    ctx.fillRect(0, 0, viewBoxWidth, viewBoxHeight);
+                    ctx.drawImage(img, 0, 0, viewBoxWidth, viewBoxHeight);
                     
                     try {
                         if (format === 'png') {
@@ -550,12 +633,12 @@
                         } else if (format === 'pdf') {
                             const imgData = canvas.toDataURL('image/png');
                             const pdf = new jspdf.jsPDF({
-                                orientation: transformed.width > transformed.height ? 'landscape' : 'portrait',
+                                orientation: viewBoxWidth > viewBoxHeight ? 'landscape' : 'portrait',
                                 unit: 'px',
-                                format: [transformed.width, transformed.height]
+                                format: [viewBoxWidth, viewBoxHeight]
                             });
                             
-                            pdf.addImage(imgData, 'PNG', 0, 0, transformed.width, transformed.height);
+                            pdf.addImage(imgData, 'PNG', 0, 0, viewBoxWidth, viewBoxHeight);
                             pdf.save('lineage_diagram.pdf');
                         }
                     } catch (error) {
@@ -737,6 +820,23 @@
                 graphOnlyButtons.forEach(btn => btn.classList.remove('hidden'));
                 tableOnlyButtons.forEach(btn => btn.classList.add('hidden'));
             }
+        }
+
+        // New function to hide column nodes with no dependency (neither source nor target in any edge)
+        function hideNonDependentColumns() {
+            const filteredNodes = originalData.nodes.filter(node => {
+                if (node.type !== 'column') return true;
+                const used = originalData.edges.some(e => e.source === node.id || e.target === node.id);
+                return used;
+            });
+            const validIds = new Set(filteredNodes.map(n => n.id));
+            const filteredEdges = originalData.edges.filter(e => validIds.has(e.source) && validIds.has(e.target));
+            updateGraph({nodes: filteredNodes, edges: filteredEdges});
+        }
+
+        // New function to unhide all hidden column nodes
+        function showAllColumns() {
+            updateGraph(originalData);
         }
     </script>
 </body>
